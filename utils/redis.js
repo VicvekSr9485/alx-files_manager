@@ -1,4 +1,3 @@
-/* eslint-disable linebreak-style */
 import { createClient } from 'redis';
 import { promisify } from 'util';
 
@@ -13,8 +12,8 @@ class RedisClient {
   }
 
   async get(key) {
-    const asyncGet = await promisify(this.client.get).bind(this.client);
-    const value = await asyncGet(key);
+    const redisGet = await promisify(this.client.get).bind(this.client);
+    const value = await redisGet(key);
     return value;
   }
 
