@@ -23,6 +23,7 @@ module.exports = {
       'no-console': 'off',
       'no-shadow': 'off',
       "no-unused-vars": "off",
+      "linebreak-style": "off",
       'no-restricted-syntax': [
         'error',
         'LabeledStatement',
