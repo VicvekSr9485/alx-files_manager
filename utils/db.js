@@ -12,21 +12,20 @@ class DBClient {
     this.client.connect();
     this.db = this.client.db(this.database);
   }
-}
 
-function isAlive() {
-  return this.client.isConnected();
-}
+  isAlive() {
+    return this.client.isConnected();
+  }
 
-async function nbUsers() {
-  const countUsers = await this.db.collection('users').countDocuments();
-  return countUsers;
-}
+  async nbUsers() {
+    const countUsers = await this.db.collection('users').countDocuments();
+    return countUsers;
+  }
 
-async function nbFiles() {
-  const countFiles = await this.db.collection('files').countDocuments();
-  return countFiles;
+  async nbFiles() {
+    const countFiles = await this.db.collection('files').countDocuments();
+    return countFiles;
+  }
 }
-
-const dbClient = DBClient();
+const dbClient = new DBClient();
 module.exports = dbClient;
