@@ -12,7 +12,7 @@ class UsersController {
       return res.status(400).json({ error: 'Missing password' });
     }
 
-    const existingUser = await dbClient.db.collection('users').find({ email }).toAray();
+    const existingUser = await dbClient.db.collection('users').find({ email }).toArray();
     if (existingUser.length > 0) {
       return res.status(400).json({ error: 'Already exist' });
     }
