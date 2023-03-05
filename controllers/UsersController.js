@@ -13,12 +13,13 @@ class UsersController {
     }
 
     const existingUser = await dbClient.db.collection('users').find({ email }).toAray();
-    if (!existingUser.length > 0) {
+    if (existingUser.length > 0) {
       return res.status(400).json({ error: 'Already exist' });
     }
     const hashedPassword = hashPassword(password);
     const newUser = await dbClient.db.collection('users').insertOne({ email, password: hashedPassword });
-    const savedUser = await newUser.save();
-    return (res.status(201).json({ id: savedUser._id, email: savedUser.email }));
+    return (res.status(201).json({ id: newUser.ops[0]._id, email: newUser.ops[0].email }));
   }
 }
+
+module.exports = UsersController;
