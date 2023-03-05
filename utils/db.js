@@ -12,12 +12,7 @@ class DBClient {
   }
 
   isAlive() {
-    try {
-      this.client.connect();
-      return true;
-    } catch (error) {
-      return false;
-    }
+    return this.client.isConnected();
   }
 
   async nbUsers() {
