@@ -4,18 +4,18 @@ import mime from 'mime-types';
 import { ObjectId } from 'mongodb';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import authUtils from '../utils/auth';
+import UsersController from './UsersController';
 import dbClient from '../utils/db';
 
 class FilesController {
     
     static async postUpload(req, res) {
     // Authenticate user, reject if no auth
-    const checkAuth = await authUtils.checkAuth(req);
-    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+    const getMe = await UsersController.getMe(req);
+    if (getMe.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
 
-    // If authed, user is the payload from checkAuth()
-    const userId = checkAuth.payload.id;
+    // If authed, user is the dbResult from getMe()
+    const userId = getMe.dbResult;
 
     // Get data from POST params
     const { name, type, data } = req.body;
@@ -105,11 +105,11 @@ class FilesController {
   
   static async getShow(req, res) {
     // Authenticate user, reject if no auth
-    const checkAuth = await authUtils.checkAuth(req);
-    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+    const getMe = await UsersController.getMe(req);
+    if (getMe.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
 
-    // If authed, user is the payload from checkAuth()
-    const userId = checkAuth.payload.id;
+    // If authed, user is the dbResult from getMe()
+    const userId = getMe.dbResult.id;
 
     let { id } = req.params;
     try {
@@ -144,11 +144,11 @@ class FilesController {
 
   static async getIndex(req, res) {
     // Authenticate user, reject if no auth
-    const checkAuth = await authUtils.checkAuth(req);
-    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+    const getMe = await UsersController.getMe(req);
+    if (getMe.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
 
-    // If authed, user is the payload from checkAuth()
-    const userId = checkAuth.payload.id;
+    // If authed, user is the dbResult from getMe()
+    const userId = getMe.dbResult.id;
 
     let { parentId, page } = req.query;
     // page number sanitizing
@@ -186,128 +186,6 @@ class FilesController {
     return res.status(200).send(sanitizedFiles);
   }
 
-  static async putPublish(req, res) {
-    // Authenticate user, reject if no auth
-    const checkAuth = await authUtils.checkAuth(req);
-    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
-
-    // If valid auth, user is the payload from checkAuth()
-    const userId = checkAuth.payload.id;
-
-    let { id } = req.params;
-    try {
-      id = ObjectId(id);
-    } catch (e) {
-      return res.status(404).send({ error: 'Not found' });
-    }
-    const requestedFile = await dbClient.files.findOne({
-      _id: ObjectId(id),
-      userId: ObjectId(userId),
-    });
-
-    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
-
-    const {
-      _id,
-      name,
-      type,
-      parentId,
-    } = requestedFile;
-
-    dbClient.files.updateOne(
-      { _id: ObjectId(id) },
-      { $set: { isPublic: true } },
-    );
-
-    return res.status(200).send({
-      id: _id,
-      userId,
-      name,
-      type,
-      isPublic: true,
-      parentId,
-    });
-  }
-
-  static async putUnpublish(req, res) {
-    // Authenticate user, reject if no auth
-    const checkAuth = await authUtils.checkAuth(req);
-    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
-
-    // If valid auth, user is the payload from checkAuth()
-    const userId = checkAuth.payload.id;
-
-    let { id } = req.params;
-    try {
-      id = ObjectId(id);
-    } catch (e) {
-      return res.status(404).send({ error: 'Not found' });
-    }
-    const requestedFile = await dbClient.files.findOne({
-      _id: ObjectId(id),
-      userId: ObjectId(userId),
-    });
-
-    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
-
-    const {
-      _id,
-      name,
-      type,
-      parentId,
-    } = requestedFile;
-
-    dbClient.files.updateOne(
-      { _id: ObjectId(id) },
-      { $set: { isPublic: false } },
-    );
-
-    return res.status(200).send({
-      id: _id,
-      userId,
-      name,
-      type,
-      isPublic: false,
-      parentId,
-    });
-  }
-
-  static async getFile(req, res) { 
-    // Authenticate user, reject if no auth
-    const checkAuth = await authUtils.checkAuth(req);
-    const userId = checkAuth.status === 200 ? checkAuth.payload.id.toString() : undefined;
-
-    let { id } = req.params;
-    const { size } = req.query;
-    try {
-      id = ObjectId(id);
-    } catch (e) {
-      return res.status(404).send({ error: 'Not found' });
-    }
-
-    const requestedFile = await dbClient.files.findOne({ _id: ObjectId(id) });
-    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
-    if (requestedFile.userId.toString() !== userId && !requestedFile.isPublic) return res.status(404).send({ error: 'Not found' });
-    if (requestedFile.type === 'folder') return res.status(400).send({ error: 'A folder doesn\'t have content' });
-
-    // Add support for image thumbnails
-
-    if (size && requestedFile.type === 'image') {
-      requestedFile.localPath = `${requestedFile.localPath}_${size}`;
-      console.log(requestedFile.localPath);
-    }
-
-    if (!fs.existsSync(requestedFile.localPath)) return res.status(404).send({ error: 'Not found' });
-    const mimeType = mime.lookup(path.extname(requestedFile.name));
-
-    let fileContent;
-    try {
-      fileContent = fs.readFileSync(requestedFile.localPath, { flag: 'r' });
-    } catch (e) {
-      return res.status(404).send({ error: 'Not found' });
-    }
-    return res.status(200).setHeader('content-type', mimeType).send(fileContent);
-  }
 }
 
 export default FilesController;
