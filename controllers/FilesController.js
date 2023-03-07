@@ -15,7 +15,7 @@ class FilesController {
     if (getMe.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
 
     // If authed, user is the dbResult from getMe()
-    const userId = getMe.dbResult;
+    const userId = getMe.dbResult._id;
 
     // Get data from POST params
     const { name, type, data } = req.body;
