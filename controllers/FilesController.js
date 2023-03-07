@@ -8,7 +8,8 @@ import authUtils from '../utils/auth';
 import dbClient from '../utils/db';
 
 class FilesController {
-  static async postUpload(req, res) {
+    
+    static async postUpload(req, res) {
     // Authenticate user, reject if no auth
     const checkAuth = await authUtils.checkAuth(req);
     if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
@@ -100,6 +101,213 @@ class FilesController {
       parentId: parentId ? ObjectId(parentId) : 0,
     });
   }
+
+  
+  static async getShow(req, res) {
+    // Authenticate user, reject if no auth
+    const checkAuth = await authUtils.checkAuth(req);
+    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+
+    // If authed, user is the payload from checkAuth()
+    const userId = checkAuth.payload.id;
+
+    let { id } = req.params;
+    try {
+      id = ObjectId(id);
+    } catch (e) {
+      return res.status(404).send({ error: 'Not found' });
+    }
+    const requestedFile = await dbClient.files.findOne({
+      _id: ObjectId(id),
+      userId: ObjectId(userId),
+    });
+
+    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
+
+    const {
+      _id,
+      name,
+      type,
+      isPublic,
+      parentId,
+    } = requestedFile;
+
+    return res.status(200).send({
+      id: _id,
+      userId,
+      name,
+      type,
+      isPublic,
+      parentId,
+    });
+  }
+
+  static async getIndex(req, res) {
+    // Authenticate user, reject if no auth
+    const checkAuth = await authUtils.checkAuth(req);
+    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+
+    // If authed, user is the payload from checkAuth()
+    const userId = checkAuth.payload.id;
+
+    let { parentId, page } = req.query;
+    // page number sanitizing
+    page = page ? Number(page, 10) : 0;
+    // parentId sanitizing
+    if (!parentId || parentId === '0') {
+      parentId = 0;
+    } else {
+      try {
+        parentId = ObjectId(parentId);
+      } catch (e) {
+        parentId = 0;
+      }
+    }
+
+    const query = [
+      { $match: { parentId, userId: ObjectId(userId) } },
+      { $skip: page * 20 },
+      { $limit: 20 },
+    ];
+
+    const requestedFiles = await dbClient.files.aggregate(query).toArray();
+
+    const sanitizedFiles = [];
+    for (const elem of requestedFiles) {
+      const file = {
+        id: elem._id,
+        name: elem.name,
+        type: elem.type,
+        isPublic: elem.isPublic,
+        parentId: elem.parentId,
+      };
+      sanitizedFiles.push(file);
+    }
+    return res.status(200).send(sanitizedFiles);
+  }
+
+  static async putPublish(req, res) {
+    // Authenticate user, reject if no auth
+    const checkAuth = await authUtils.checkAuth(req);
+    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+
+    // If valid auth, user is the payload from checkAuth()
+    const userId = checkAuth.payload.id;
+
+    let { id } = req.params;
+    try {
+      id = ObjectId(id);
+    } catch (e) {
+      return res.status(404).send({ error: 'Not found' });
+    }
+    const requestedFile = await dbClient.files.findOne({
+      _id: ObjectId(id),
+      userId: ObjectId(userId),
+    });
+
+    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
+
+    const {
+      _id,
+      name,
+      type,
+      parentId,
+    } = requestedFile;
+
+    dbClient.files.updateOne(
+      { _id: ObjectId(id) },
+      { $set: { isPublic: true } },
+    );
+
+    return res.status(200).send({
+      id: _id,
+      userId,
+      name,
+      type,
+      isPublic: true,
+      parentId,
+    });
+  }
+
+  static async putUnpublish(req, res) {
+    // Authenticate user, reject if no auth
+    const checkAuth = await authUtils.checkAuth(req);
+    if (checkAuth.status !== 200) return res.status(401).send({ error: 'Unauthorized' });
+
+    // If valid auth, user is the payload from checkAuth()
+    const userId = checkAuth.payload.id;
+
+    let { id } = req.params;
+    try {
+      id = ObjectId(id);
+    } catch (e) {
+      return res.status(404).send({ error: 'Not found' });
+    }
+    const requestedFile = await dbClient.files.findOne({
+      _id: ObjectId(id),
+      userId: ObjectId(userId),
+    });
+
+    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
+
+    const {
+      _id,
+      name,
+      type,
+      parentId,
+    } = requestedFile;
+
+    dbClient.files.updateOne(
+      { _id: ObjectId(id) },
+      { $set: { isPublic: false } },
+    );
+
+    return res.status(200).send({
+      id: _id,
+      userId,
+      name,
+      type,
+      isPublic: false,
+      parentId,
+    });
+  }
+
+  static async getFile(req, res) { 
+    // Authenticate user, reject if no auth
+    const checkAuth = await authUtils.checkAuth(req);
+    const userId = checkAuth.status === 200 ? checkAuth.payload.id.toString() : undefined;
+
+    let { id } = req.params;
+    const { size } = req.query;
+    try {
+      id = ObjectId(id);
+    } catch (e) {
+      return res.status(404).send({ error: 'Not found' });
+    }
+
+    const requestedFile = await dbClient.files.findOne({ _id: ObjectId(id) });
+    if (!requestedFile) return res.status(404).send({ error: 'Not found' });
+    if (requestedFile.userId.toString() !== userId && !requestedFile.isPublic) return res.status(404).send({ error: 'Not found' });
+    if (requestedFile.type === 'folder') return res.status(400).send({ error: 'A folder doesn\'t have content' });
+
+    // Add support for image thumbnails
+
+    if (size && requestedFile.type === 'image') {
+      requestedFile.localPath = `${requestedFile.localPath}_${size}`;
+      console.log(requestedFile.localPath);
+    }
+
+    if (!fs.existsSync(requestedFile.localPath)) return res.status(404).send({ error: 'Not found' });
+    const mimeType = mime.lookup(path.extname(requestedFile.name));
+
+    let fileContent;
+    try {
+      fileContent = fs.readFileSync(requestedFile.localPath, { flag: 'r' });
+    } catch (e) {
+      return res.status(404).send({ error: 'Not found' });
+    }
+    return res.status(200).setHeader('content-type', mimeType).send(fileContent);
+  }
 }
 
-module.exports = FilesController;
+export default FilesController;
